@@ -12,7 +12,7 @@
 const PlayerMech = EUDArray(6);
 const PlayerCommandCard = EUDArray(6);
 const PlayerWeaponID = EUDArray(6);
-const PlayerPodID = EUDArray(6);
+const PlayerActiveModule = EUDArray(6);
 const BaseUnitID = 17; // Alan Schezar Goliath
 const TurretUnitBaseID = 194; // Zerg Beacon
 const PlayerWeaponBaseID = 122; // Unused Gauss Rifle
@@ -30,6 +30,7 @@ const String_Reconfigure_Modules = Db("x\x03\x01 Reconfigure Au\x03x\x01ilary Mo
 const SpawnLocation1 = $L("Spawns");
 const SpawnLocation2 = $L("Spawns 2");
 const TempLocation = $L("Temp");
+const EffectLocation = $L("Effect");
 const Screen = StringBuffer(256);
 
 const weapon0 = py_eval('int(settings.get("weapon0", 7))');
@@ -43,6 +44,18 @@ const weapon7 = py_eval('int(settings.get("weapon7", 70))');
 const WeaponMap = [weapon0, weapon1, weapon2, weapon3, weapon4, weapon5, weapon6, weapon7];
 
 // Utils functions
+
+function createImageSpriteAtPoint(image, x, y) {
+  setloc(EffectLocation, x, y);
+  SetMemoryX(0x00666458, SetTo, image, 0x0000ffff);
+  CreateUnit(1, $U("Scanner Sweep"), EffectLocation, $P8);
+  RemoveUnit($U("Scanner Sweep"), AllPlayers); 
+  SetMemoryX(0x00666458, SetTo, 546, 0x0000ffff);
+}
+
+function PTR(epd) {
+  return 4 * epd + 0x58A364;
+}
 
 function getWeaponIconID(weaponID) {
   return wread(0x6564E0 + 672 + weaponID * 2);
@@ -214,7 +227,7 @@ function setCommandCard(commandCard) {
       setButtonIconWithState(0, 228, String_Move, 0, true, 3);
       setButtonIconWithState(1, 229, String_Stop, 0, true, 4);
       setButtonIconWithState(2, 230, String_Attack, 0, true, 5);
-      setButtonIconWithState(6, 230, String_Ability, 0, true, 6);
+      setButtonIconWithState(6, 250, String_Ability, 0, true, 6);
       setButtonIconWithState(7, 233, String_Change_Weapon, 0, true, 1);
       setButtonIconWithState(8, 235, String_Reconfigure_Modules, 0, true, 1);
     break;
@@ -229,7 +242,7 @@ function setCommandCard(commandCard) {
     case 2: // Change pod menu
       for (var i = 0; i < 8; i++) {
         var enabled = true;
-        if (PlayerPodID[playerID] == i) enabled = false;
+        if (PlayerActiveModule[playerID] == i) enabled = false;
         setButtonIconWithState(i, 384, String_Empty, 0, enabled, 1);
       }
       setButtonIconWithState(8, 236, String_Cancel, 0, true, 1);
@@ -240,6 +253,8 @@ function setCommandCard(commandCard) {
 }
 
 function setupMap() {
+  wwrite(0x65FD00 + 6168 + 33 * 2, 2); // Scanner Sweep Creation
+
   for (var unitID = DynamicButtonSetFirstUnitType; unitID < DynamicButtonSetFirstUnitType + 9; unitID++) {
       bwrite(0x65FD00 + 16360 + unitID * 1, 0);
       wwrite(0x65FD00 + 15240 + unitID * 2, 0);
@@ -269,14 +284,43 @@ function changeWeapon(playerID, id) {
   Screen.printf("Changing to weapon: {}", weaponID);
 }
 
+function useAbilityOnUnit(playerID, moduleID, targetUnit) {
+    Screen.printf("Test: Using ability: {} on target: {}", moduleID, targetUnit);
+    const x = wread_epd(targetUnit + 0x028 / 4, 0x028 % 4);
+    const y = wread_epd(targetUnit + 0x02A / 4, 0x02A % 4);
+    createImageSpriteAtPoint(557, x, y);
+}
+
+function useAbilityOnGround(playerID, moduleID, x, y) {
+    Screen.printf("Test: Using ground ability: {} at x: {} y: {}", moduleID, x, y);
+    createImageSpriteAtPoint(555, x, y);
+}
+
 function changePod(playerID, id) {
   // Screen.printf("Player: {} ID: {}", playerID, id);
-  PlayerPodID[playerID] = id;
+  PlayerActiveModule[playerID] = id;
   Screen.printf("Changing to pod: {}", id);
 }
 
 function handleMech(playerID, epd) {
+  if (epd == 0) return;
   setcurpl(playerID);
+  // Screen.printf("handleMech: {} {} oid {}", playerID, epd, bread_epd(epd + 0x04D / 4, 0x04D % 4));
+  if (bread_epd(epd + 0x04D / 4, 0x04D % 4) == 152) { // Patrol
+    const moduleID = PlayerActiveModule[playerID];
+    const targetUnit = EPD(dwread_epd(epd + 0x05C / 4));
+    if (PTR(targetUnit) > 0) {
+      useAbilityOnUnit(playerID, moduleID, targetUnit);
+    } else {
+      useAbilityOnGround(playerID, moduleID, wread_epd(epd + 0x058 / 4, 0x058 % 4), wread_epd(epd + 0x05A / 4, 0x05A % 4));
+    }
+    bwrite_epd(epd + 0x04D / 4, 0x04D % 4, 1); // Stop
+    SetMemoryEPD(epd + 0x05C / 4, SetTo, 0); // Target Unit
+    wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target X
+    wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target Y
+  }
+
+  // Button usage
   if (isUnitBuildingUnit(epd)) {
     const button = getButtonIndexFromBuildQueue(epd);
     clearBuildQueue(epd);
