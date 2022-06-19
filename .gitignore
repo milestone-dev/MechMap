@@ -1,0 +1,10 @@
+
+__epspy__/
+__pycache__/
+*.scx
+*.txt
+*.tmp
+*.e2s
+ETK/
+References/
+MechMap/
