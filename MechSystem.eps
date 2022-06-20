@@ -141,19 +141,23 @@ function setButtonIconWithState(position, iconID, title, subtitle, enabled, acti
       } else if (actionType == 2) { // cancel
         action = 228 * 65536;
         actionPrefix = 4561648; //Unknown but write anyway
-      } else if (actionType == 3) {// Move
+      } else if (actionType == 3) { // Move
         actionPrefix = 4342848;
         action = 0;
-      } else if (actionType == 4) {// Stop
+      } else if (actionType == 4) { // Stop
         actionPrefix = 4338672;
         action = 0;
-      } else if (actionType == 5) {// Attack
+      } else if (actionType == 5) { // Attack
         actionPrefix = 4342656;
         action = 0;
-      } else if (actionType == 6) {// Patrol
+      } else if (actionType == 6) { // Patrol
         actionPrefix = 4342080;
         action = 0;
+      } else if (actionType == 7) { // Recall
+        actionPrefix = 4341616;
+        action = 1114112;//1376256;
       }
+
 
     iconID = (iconID * 65536) + position + 1;
       const btnPtr = EPD(0x5187EC) + DynamicButtonSetID * 3;
@@ -227,7 +231,7 @@ function setCommandCard(commandCard) {
       setButtonIconWithState(0, 228, String_Move, 0, true, 3);
       setButtonIconWithState(1, 229, String_Stop, 0, true, 4);
       setButtonIconWithState(2, 230, String_Attack, 0, true, 5);
-      setButtonIconWithState(6, 250, String_Ability, 0, true, 6);
+      setButtonIconWithState(6, 250, String_Ability, 0, true, 7);
       setButtonIconWithState(7, 233, String_Change_Weapon, 0, true, 1);
       setButtonIconWithState(8, 235, String_Reconfigure_Modules, 0, true, 1);
     break;
@@ -306,18 +310,27 @@ function handleMech(playerID, epd) {
   if (epd == 0) return;
   setcurpl(playerID);
   // Screen.printf("handleMech: {} {} oid {}", playerID, epd, bread_epd(epd + 0x04D / 4, 0x04D % 4));
-  if (bread_epd(epd + 0x04D / 4, 0x04D % 4) == 152) { // Patrol
+  if (bread_epd(epd + 0x04D / 4, 0x04D % 4) == 146) { // Ensnare
+    Screen.printf("handleMech: oid {} targetUnit {} x {} y {}",
+      bread_epd(epd + 0x04D / 4, 0x04D % 4),
+      EPD(dwread_epd(epd + 0x05C / 4)),
+      wread_epd(epd + 0x058 / 4, 0x058 % 4),
+      wread_epd(epd + 0x05A / 4, 0x05A % 4)
+    );
     const moduleID = PlayerActiveModule[playerID];
     const targetUnit = EPD(dwread_epd(epd + 0x05C / 4));
-    if (PTR(targetUnit) > 0) {
-      useAbilityOnUnit(playerID, moduleID, targetUnit);
-    } else {
-      useAbilityOnGround(playerID, moduleID, wread_epd(epd + 0x058 / 4, 0x058 % 4), wread_epd(epd + 0x05A / 4, 0x05A % 4));
+    var closeEnough = true;
+    if (closeEnough) {
+      if (PTR(targetUnit) > 0) {
+        useAbilityOnUnit(playerID, moduleID, targetUnit);
+      } else {
+        useAbilityOnGround(playerID, moduleID, wread_epd(epd + 0x058 / 4, 0x058 % 4), wread_epd(epd + 0x05A / 4, 0x05A % 4));
+      }
+      bwrite_epd(epd + 0x04D / 4, 0x04D % 4, 1); // Stop
+      SetMemoryEPD(epd + 0x05C / 4, SetTo, 0); // Target Unit
+      wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target X
+      wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target Y
     }
-    bwrite_epd(epd + 0x04D / 4, 0x04D % 4, 1); // Stop
-    SetMemoryEPD(epd + 0x05C / 4, SetTo, 0); // Target Unit
-    wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target X
-    wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target Y
   }
 
   // Button usage
