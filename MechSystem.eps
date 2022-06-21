@@ -1,3 +1,5 @@
+import TriggerEditor;
+
 // Integration:
 // #1 - In EE2->Plugins:
 // * Put the eps file somewhere on your disk and put the full path in the "Additional eds text" field. Example: 
@@ -27,6 +29,17 @@ const String_Ability = Db("q\x03\x03Q\x01 - Use ability");
 const String_Cancel = Db("\x1B\x03\x03ESC\x01 - Cancel");
 const String_Change_Weapon = Db("w\x03\x01 Change \x03W\x01eapon");
 const String_Reconfigure_Modules = Db("x\x03\x01 Reconfigure Au\x03x\x01ilary Modules");
+
+const String_Module_0 = Db("q\x03\x03Q\x01 - Enable Module 0");
+const String_Module_1 = Db("w\x03\x03W\x01 - Enable Module 1");
+const String_Module_2 = Db("e\x03\x03E\x01 - Enable Module 2");
+const String_Module_3 = Db("a\x03\x03A\x01 - Enable Module 3");
+const String_Module_4 = Db("s\x03\x03S\x01 - Enable Module 4");
+const String_Module_5 = Db("d\x03\x03D\x01 - Enable Module 5");
+const String_Module_6 = Db("z\x03\x03Z\x01 - Enable Module 6");
+const String_Module_7 = Db("x\x03\x03X\x01 - Enable Module 7");
+const ModuleStrings = [String_Module_0,String_Module_1,String_Module_2,String_Module_3,String_Module_4,String_Module_5,String_Module_6,String_Module_7];
+
 const SpawnLocation1 = $L("Spawns");
 const SpawnLocation2 = $L("Spawns 2");
 const TempLocation = $L("Temp");
@@ -247,7 +260,7 @@ function setCommandCard(commandCard) {
       for (var i = 0; i < 8; i++) {
         var enabled = true;
         if (PlayerActiveModule[playerID] == i) enabled = false;
-        setButtonIconWithState(i, 384, String_Empty, 0, enabled, 1);
+        setButtonIconWithState(i, 384, ModuleStrings[i], 0, enabled, 1);
       }
       setButtonIconWithState(8, 236, String_Cancel, 0, true, 1);
     break;
@@ -258,6 +271,7 @@ function setCommandCard(commandCard) {
 
 function setupMap() {
   wwrite(0x65FD00 + 6168 + 33 * 2, 2); // Scanner Sweep Creation
+  wwrite(0x656198 + 488 + 17 * 2, 0); // Ensnare Energy
 
   for (var unitID = DynamicButtonSetFirstUnitType; unitID < DynamicButtonSetFirstUnitType + 9; unitID++) {
       bwrite(0x65FD00 + 16360 + unitID * 1, 0);
@@ -289,15 +303,11 @@ function changeWeapon(playerID, id) {
 }
 
 function useAbilityOnUnit(playerID, moduleID, targetUnit) {
-    Screen.printf("Test: Using ability: {} on target: {}", moduleID, targetUnit);
-    const x = wread_epd(targetUnit + 0x028 / 4, 0x028 % 4);
-    const y = wread_epd(targetUnit + 0x02A / 4, 0x02A % 4);
-    createImageSpriteAtPoint(557, x, y);
+    TriggerEditor.OnMechUseAbilityOnUnit(playerID, moduleID, targetUnit);
 }
 
 function useAbilityOnGround(playerID, moduleID, x, y) {
-    Screen.printf("Test: Using ground ability: {} at x: {} y: {}", moduleID, x, y);
-    createImageSpriteAtPoint(555, x, y);
+    TriggerEditor.OnMechUseAbilityOnGround(playerID, moduleID, x, y);
 }
 
 function changePod(playerID, id) {
@@ -309,14 +319,7 @@ function changePod(playerID, id) {
 function handleMech(playerID, epd) {
   if (epd == 0) return;
   setcurpl(playerID);
-  // Screen.printf("handleMech: {} {} oid {}", playerID, epd, bread_epd(epd + 0x04D / 4, 0x04D % 4));
   if (bread_epd(epd + 0x04D / 4, 0x04D % 4) == 146) { // Ensnare
-    Screen.printf("handleMech: oid {} targetUnit {} x {} y {}",
-      bread_epd(epd + 0x04D / 4, 0x04D % 4),
-      EPD(dwread_epd(epd + 0x05C / 4)),
-      wread_epd(epd + 0x058 / 4, 0x058 % 4),
-      wread_epd(epd + 0x05A / 4, 0x05A % 4)
-    );
     const moduleID = PlayerActiveModule[playerID];
     const targetUnit = EPD(dwread_epd(epd + 0x05C / 4));
     var closeEnough = true;
@@ -326,6 +329,8 @@ function handleMech(playerID, epd) {
       } else {
         useAbilityOnGround(playerID, moduleID, wread_epd(epd + 0x058 / 4, 0x058 % 4), wread_epd(epd + 0x05A / 4, 0x05A % 4));
       }
+      wwrite_epd(epd + 0x010 / 4, 0x010 % 4, wread_epd(epd + 0x028 / 4, 0x028 % 4)); // getMoveTargetX
+      wwrite_epd(epd + 0x012 / 4, 0x012 % 4, wread_epd(epd + 0x02A / 4, 0x02A % 4)); // getMoveTargetY
       bwrite_epd(epd + 0x04D / 4, 0x04D % 4, 1); // Stop
       SetMemoryEPD(epd + 0x05C / 4, SetTo, 0); // Target Unit
       wwrite_epd(epd + 0x058 / 4, 0x058 % 4, 0); // Target X
@@ -354,7 +359,6 @@ function handleMech(playerID, epd) {
         setCommandCard(0);
       }
     }
-    // Screen.printf("Player: {} BTN: {} CC: {}", playerID, button, PlayerCommandCard[playerID]);
   }
 }
 
